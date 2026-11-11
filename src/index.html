@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Tiny Kaiju</title>
+<meta name="description" content="Stomp a toy city, grow huge, cause a catastrophe. 75 seconds.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#2b1d3a; --pink:#ff6f7d; --mint:#7fe0a8; --cream:#fff6e0; --sky:#bfe8ff; }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; overflow:hidden; background:#9fd8f5; font-family:'Nunito',system-ui,sans-serif; color:var(--ink); user-select:none; touch-action:none; }
+  canvas { display:block; }
+  .hud { position:fixed; inset:0; pointer-events:none; }
+  .top { position:absolute; top:14px; left:16px; right:16px; display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .pill { background:var(--cream); border:3px solid var(--ink); border-radius:16px; padding:6px 14px; box-shadow:0 4px 0 var(--ink); font-family:'Lilita One',sans-serif; font-size:22px; line-height:1.1; }
+  .pill small { display:block; font-family:'Nunito'; font-weight:900; font-size:11px; letter-spacing:.08em; opacity:.6; }
+  #timer.low { background:var(--pink); color:#fff; animation:pulse .5s infinite alternate; }
+  @keyframes pulse { to { transform:scale(1.08); } }
+  #combo { position:absolute; top:84px; left:50%; transform:translateX(-50%); font-family:'Lilita One'; font-size:44px; color:#fff; -webkit-text-stroke:3px var(--ink); paint-order:stroke; opacity:0; transition:opacity .2s; white-space:nowrap; }
+  #growbar { position:absolute; bottom:22px; left:16px; width:min(260px,45vw); height:18px; background:var(--cream); border:3px solid var(--ink); border-radius:12px; overflow:hidden; box-shadow:0 3px 0 var(--ink); }
+  #growfill { height:100%; width:0; background:linear-gradient(90deg,var(--mint),#3fc27e); transition:width .25s; }
+  #growlbl { position:absolute; bottom:46px; left:18px; font-family:'Lilita One'; font-size:16px; color:#fff; -webkit-text-stroke:2px var(--ink); paint-order:stroke; }
+  .pop { position:fixed; font-family:'Lilita One'; color:#fff; -webkit-text-stroke:3px var(--ink); paint-order:stroke; pointer-events:none; animation:popup 0.9s ease-out forwards; white-space:nowrap; transform:translate(-50%,-50%); }
+  @keyframes popup { 0%{ opacity:0; margin-top:10px; scale:.5 } 15%{ opacity:1; scale:1.25 } 30%{ scale:1 } 100%{ opacity:0; margin-top:-70px } }
+  .screen { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:16px; background:radial-gradient(ellipse at center, rgba(255,246,224,.55), rgba(43,29,58,.55)); pointer-events:auto; }
+  .screen h1 { font-family:'Lilita One'; font-size:clamp(56px,13vw,120px); color:var(--mint); -webkit-text-stroke:6px var(--ink); paint-order:stroke; line-height:.9; transform:rotate(-4deg); text-shadow:0 8px 0 var(--ink); }
+  .screen h1 span { color:var(--pink); display:block; }
+  .screen p { margin-top:18px; font-size:clamp(15px,3.8vw,19px); font-weight:900; color:#fff; text-shadow:0 2px 0 var(--ink),0 0 12px rgba(43,29,58,.6); max-width:520px; }
+  .btn { margin-top:26px; font-family:'Lilita One'; font-size:30px; padding:12px 40px; background:var(--pink); color:#fff; border:4px solid var(--ink); border-radius:20px; box-shadow:0 6px 0 var(--ink); cursor:pointer; transition:transform .08s; }
+  .btn:hover { transform:translateY(-2px); } .btn:active { transform:translateY(4px); box-shadow:0 2px 0 var(--ink); }
+  .btn.alt { background:var(--cream); color:var(--ink); font-size:20px; padding:8px 24px; margin-top:14px; }
+  .keys { margin-top:22px; display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  .key { background:var(--cream); border:3px solid var(--ink); border-radius:10px; padding:4px 10px; font-weight:900; font-size:14px; box-shadow:0 3px 0 var(--ink); }
+  .stats { margin-top:18px; display:grid; grid-template-columns:repeat(3,auto); gap:10px; }
+  .rank { font-family:'Lilita One'; font-size:clamp(30px,8vw,52px); color:var(--pink); -webkit-text-stroke:4px var(--ink); paint-order:stroke; margin-top:8px; }
+  .hidden { display:none !important; }
+  #stomp { position:fixed; right:22px; bottom:26px; width:96px; height:96px; border-radius:50%; background:var(--pink); border:4px solid var(--ink); box-shadow:0 6px 0 var(--ink); color:#fff; font-family:'Lilita One'; font-size:20px; display:none; align-items:center; justify-content:center; pointer-events:auto; }
+  #stomp.cool { opacity:.5; }
+  #joy { position:fixed; width:110px; height:110px; border-radius:50%; border:3px solid rgba(43,29,58,.5); background:rgba(255,246,224,.3); display:none; pointer-events:none; transform:translate(-50%,-50%); }
+  #joy i { position:absolute; left:50%; top:50%; width:46px; height:46px; margin:-23px; border-radius:50%; background:var(--cream); border:3px solid var(--ink); }
+  body.touch #stomp { display:flex; } body.touch #growbar,body.touch #growlbl { bottom:auto; top:80px; } body.touch #growlbl { top:58px; }
+  @media (prefers-reduced-motion: reduce) { #timer.low { animation:none; } }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div class="hud">
+  <div class="top">
+    <div class="pill"><small>DAMAGE</small><span id="score">0</span></div>
+    <div style="display:flex;gap:8px;align-items:flex-start"><button class="pill" id="mute" aria-label="Mute" style="pointer-events:auto;cursor:pointer;font-size:20px;padding:8px 10px">🔊</button><div class="pill" id="timer"><small>TIME</small><span id="time">75</span></div></div>
+  </div>
+  <div id="combo"></div>
+  <div id="growlbl">20 m tall</div>
+  <div id="growbar"><div id="growfill"></div></div>
+</div>
+<div id="joy"><i></i></div>
+<div id="stomp">STOMP</div>
+
+<div class="screen" id="start">
+  <h1>TINY<span>KAIJU</span></h1>
+  <p>You are very small. The city is very breakable. Smash anything shorter than you, grow, and level the skyline before time runs out.</p>
+  <button class="btn" id="go" disabled>Loading…</button>
+  <div class="keys"><span class="key">WASD / ARROWS · move</span><span class="key">SPACE · stomp</span><span class="key">M · mute</span><span class="key">📱 drag + STOMP</span></div>
+</div>
+<div class="screen hidden" id="end">
+  <p style="margin:0">CITY STATUS</p>
+  <div class="rank" id="rank">—</div>
+  <div class="stats">
+    <div class="pill"><small>DAMAGE</small><span id="fScore">0</span></div>
+    <div class="pill"><small>FLATTENED</small><span id="fCount">0</span></div>
+    <div class="pill"><small>PEAK HEIGHT</small><span id="fSize">0</span></div>
+  </div>
+  <p id="best"></p>
+  <button class="btn" id="again">Rampage again</button>
+  <button class="btn alt" id="share">Copy brag</button>
+</div>
+
+<script src="kaiju.js"></script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const MODEL_YAW = -Math.PI / 2; // Tripo mesh faces +X; this turns it to +Z (the walking direction)
+const ROUND = 75, SMASH_RATIO = 2.4;
+const $ = id => document.getElementById(id);
+
+// ---------- renderer / scene ----------
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#a9dcf7');
+scene.fog = new THREE.Fog('#a9dcf7', 60, 190);
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 500);
+scene.add(new THREE.HemisphereLight('#fff6e0', '#7a9cc4', 1.5));
+const sun = new THREE.DirectionalLight('#fff0d6', 2.6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.bias = -0.0005;
+scene.add(sun, sun.target);
+
+// ---------- city ----------
+const N = 9, B = 16, R = 6, P = B + R, HALF = (N * P) / 2;
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[(Math.random() * a.length) | 0];
+const WALLS = ['#ffd7a8','#ffb4b4','#c8b6ff','#a8e6ff','#fff1a8','#b8f2c9','#ffc8e6','#f4f4f4'];
+const ROOFS = ['#ff6f7d','#5d7bd6','#45b37a','#ffa94d'];
+
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ color:'#8fd18a' }));
+ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+const road = new THREE.Mesh(new THREE.PlaneGeometry(N*P + R, N*P + R), new THREE.MeshStandardMaterial({ color:'#5b5f73' }));
+road.rotation.x = -Math.PI/2; road.position.y = 0.01; road.receiveShadow = true; scene.add(road);
+
+// window texture shared by all buildings
+const winTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0,0,64,64);
+  g.fillStyle = '#6d7fa8'; g.fillRect(14,12,36,30);
+  g.fillStyle = '#9fb3dc'; g.fillRect(14,12,36,10);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+const boxGeo = new THREE.BoxGeometry(1,1,1); boxGeo.translate(0,0.5,0);
+const roofGeo = new THREE.ConeGeometry(0.75, 1, 4); roofGeo.rotateY(Math.PI/4); roofGeo.translate(0,0.5,0);
+const matCache = {};
+const flat = c => matCache[c] ??= new THREE.MeshStandardMaterial({ color:c, roughness:.8 });
+
+const props = []; // everything smashable: {obj,x,z,w,d,h,colors,alive,pts}
+function addProp(obj, x, z, w, d, h, colors) {
+  obj.position.set(x, 0, z); obj.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
+  scene.add(obj); props.push({ obj, x, z, w, d, h, colors, alive:true });
+}
+function building(x, z, w, d, h) {
+  const wall = pick(WALLS);
+  const tex = winTex.clone(); tex.repeat.set(Math.max(1, Math.round(w/2.2)), Math.max(1, Math.round(h/2.4)));
+  const side = new THREE.MeshStandardMaterial({ color:wall, map:tex, roughness:.75 });
+  const m = new THREE.Mesh(boxGeo, [side, side, flat(wall), flat(wall), side, side]);
+  m.scale.set(w, h, d);
+  const g = new THREE.Group(); g.add(m);
+  const roof = pick(ROOFS);
+  if (h < 4) { const r = new THREE.Mesh(roofGeo, flat(roof)); r.scale.set(w*1.05, Math.min(w,d)*0.4, d*1.05); r.position.y = h; g.add(r); h += Math.min(w,d)*0.4; }
+  else if (Math.random() < .6) { const t = new THREE.Mesh(boxGeo, flat('#e9e3d6')); t.scale.set(w*.35, h*.08, d*.35); t.position.y = h; g.add(t); }
+  addProp(g, x, z, w, d, h, [wall, roof, '#6d7fa8']);
+}
+function tree(x, z) {
+  const s = rnd(.7, 1.3), g = new THREE.Group();
+  const trunk = new THREE.Mesh(boxGeo, flat('#8a5a3c')); trunk.scale.set(.2*s,.5*s,.2*s);
+  const leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(.55*s, 0), flat(pick(['#3fae6a','#56c27e','#2f9a5c']))); leaf.position.y = .9*s;
+  g.add(trunk, leaf); addProp(g, x, z, .8*s, .8*s, 1.4*s, ['#3fae6a','#8a5a3c']);
+}
+const maxD = Math.hypot(HALF, HALF);
+for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+  const cx = (i - (N-1)/2) * P, cz = (j - (N-1)/2) * P;
+  const pad = new THREE.Mesh(boxGeo, flat('#e6ddcc')); pad.scale.set(B, .12, B); pad.position.set(cx, 0, cz); pad.receiveShadow = true; scene.add(pad);
+  const t = Math.hypot(cx, cz) / maxD;           // 0 center → 1 corner
+  if ((i + j * 3) % 7 === 3) { // park
+    const grass = new THREE.Mesh(boxGeo, flat('#7ccf7a')); grass.scale.set(B-1,.16,B-1); grass.position.set(cx,0,cz); scene.add(grass);
+    for (let k = 0; k < 14; k++) tree(cx + rnd(-6.5,6.5), cz + rnd(-6.5,6.5));
+    continue;
+  }
+  const lots = t < .3 ? 4 : t < .65 ? 3 : 2, ls = B / lots;
+  for (let a = 0; a < lots; a++) for (let b = 0; b < lots; b++) {
+    const x = cx - B/2 + ls*(a+.5), z = cz - B/2 + ls*(b+.5);
+    const h = rnd(.5, 1.3) + Math.pow(t, 1.4) * rnd(6, 34) + (t > .5 ? rnd(0, 8) : 0);
+    building(x, z, ls*rnd(.6,.82), ls*rnd(.6,.82), h);
+  }
+}
+
+// cars
+const cars = [];
+for (let k = 0; k < 46; k++) {
+  const alongX = k % 2 === 0, lane = ((k * 7) % (N + 1) - N/2) * P + (k % 4 < 2 ? 1.4 : -1.4);
+  const col = pick(['#ff6f7d','#ffd166','#4dabf7','#ffffff','#9b8cff']);
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(boxGeo, flat(col)); body.scale.set(1.1,.35,.55);
+  const cab = new THREE.Mesh(boxGeo, flat('#dff3ff')); cab.scale.set(.55,.28,.48); cab.position.set(-.05,.35,0);
+  g.add(body, cab); g.traverse(o => o.isMesh && (o.castShadow = true)); scene.add(g);
+  const dir = k % 4 < 2 ? 1 : -1;
+  cars.push({ obj:g, alongX, lane, s:rnd(-HALF, HALF), dir, v:rnd(3,6), alive:true, col });
+}
+
+// ---------- debris (instanced) ----------
+const DMAX = 2400;
+const debris = new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({ roughness:.7 }), DMAX);
+debris.castShadow = true; debris.frustumCulled = false; scene.add(debris);
+const D = Array.from({ length:DMAX }, () => ({ p:new THREE.Vector3(), v:new THREE.Vector3(), r:new THREE.Euler(), w:new THREE.Vector3(), s:0, life:0 }));
+let dHead = 0; const dm = new THREE.Matrix4(), dq = new THREE.Quaternion(), dsv = new THREE.Vector3(), tc = new THREE.Color();
+for (let i = 0; i < DMAX; i++) { debris.setMatrixAt(i, dm.makeScale(0,0,0)); debris.setColorAt(i, tc.set('#fff')); }
+function spawnDebris(x, y, z, sx, sy, sz, color, from, power, size) {
+  const d = D[dHead]; debris.setColorAt(dHead, tc.set(color)); dHead = (dHead + 1) % DMAX;
+  d.p.set(x + rnd(-sx,sx)/2, y + rnd(0, sy), z + rnd(-sz,sz)/2);
+  const out = d.p.clone().sub(from).setY(0).normalize();
+  d.v.set(out.x * rnd(2,8) * power, rnd(4, 12) * power, out.z * rnd(2,8) * power);
+  d.w.set(rnd(-8,8), rnd(-8,8), rnd(-8,8)); d.r.set(rnd(0,6), rnd(0,6), rnd(0,6));
+  d.s = size * rnd(.5, 1.2); d.life = rnd(2.5, 4);
+}
+// dust puffs
+const PMAX = 300;
+const puffs = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color:'#fff8ec', roughness:1, flatShading:true }), PMAX);
+puffs.frustumCulled = false; scene.add(puffs);
+const PU = Array.from({ length:PMAX }, () => ({ p:new THREE.Vector3(), v:new THREE.Vector3(), s:0, t:0, life:0 }));
+let pHead = 0; for (let i = 0; i < PMAX; i++) puffs.setMatrixAt(i, dm.makeScale(0,0,0));
+function puff(x, y, z, s) { const q = PU[pHead]; pHead = (pHead+1)%PMAX; q.p.set(x,y,z); q.v.set(rnd(-2,2), rnd(1,3), rnd(-2,2)).multiplyScalar(s*.6); q.s = s*rnd(.6,1.2); q.t = 0; q.life = rnd(.6,1.1); }
+
+// shock rings
+const rings = [];
+function ring(x, z, r) {
+  const m = new THREE.Mesh(new THREE.RingGeometry(.85, 1, 48), new THREE.MeshBasicMaterial({ color:'#fff6e0', transparent:true, side:THREE.DoubleSide }));
+  m.rotation.x = -Math.PI/2; m.position.set(x, .15, z); scene.add(m); rings.push({ m, t:0, r });
+}
+
+// ---------- kaiju ----------
+const kaiju = new THREE.Group(); scene.add(kaiju);
+const pivot = new THREE.Group(); kaiju.add(pivot);
+function fallbackKaiju() {
+  const g = new THREE.Group(), green = flat('#7fe0a8');
+  const body = new THREE.Mesh(new THREE.SphereGeometry(.38, 24, 16), green); body.scale.set(1,1.15,1); body.position.y = .45;
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(.3, 20, 14), flat('#fff1c9')); belly.position.set(0,.42,.14); belly.scale.set(1,1.1,.7);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.3, 24, 16), green); head.position.y = .9;
+  for (let s of [-1,1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(.06,12,8), flat('#2b1d3a')); e.position.set(s*.12,.95,.26); g.add(e); }
+  for (let k = 0; k < 5; k++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(.07,.18,6), flat('#ff6f7d')); sp.position.set(0,1.1-k*.17,-.3+k*.0); sp.rotation.x = -.5; sp.position.z = -.22 - k*.03; g.add(sp); }
+  g.add(body, belly, head); return g;
+}
+const loader = new GLTFLoader();
+const WALK = { uPhase:{ value:0 }, uAmt:{ value:0 }, uTime:{ value:0 } };
+// Procedural walk on the unrigged Tripo mesh (model space: faces +Z, height 1): legs stride, arms counter-swing, tail sways.
+function deform(mat) {
+  mat.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, WALK);
+    sh.vertexShader = 'uniform float uPhase, uAmt, uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      vec3 p0 = transformed;
+      float side = clamp(p0.x / 0.07, -1.0, 1.0);
+      float sw = sin(uPhase) * side;
+      float leg = 1.0 - smoothstep(0.06, 0.30, p0.y);
+      transformed.z += sw * 0.13 * uAmt * leg;
+      transformed.y += max(0.0, cos(uPhase) * side) * 0.07 * uAmt * leg * smoothstep(0.30, 0.0, p0.y);
+      float arm = smoothstep(0.22, 0.34, abs(p0.x)) * smoothstep(0.38, 0.48, p0.y) * (1.0 - smoothstep(0.66, 0.74, p0.y));
+      transformed.z -= sw * 0.07 * uAmt * arm;
+      transformed.y += sin(uTime * 4.0 + side) * 0.012 * arm;
+      float tail = smoothstep(-0.12, -0.42, p0.z) * (1.0 - smoothstep(0.35, 0.6, p0.y));
+      float tz = clamp((-p0.z - 0.12) / 0.3, 0.0, 1.0);
+      transformed.x += sin(uPhase + 1.2 - tz * 1.5) * 0.09 * tail * tz * (0.3 + uAmt) + sin(uTime * 2.0) * 0.02 * tail * tz;
+      transformed.y += sin(uPhase * 2.0) * 0.015 * tail * tz;
+    `);
+  };
+  return mat;
+}
+// Bake yaw + normalization into the geometry so the shader works in clean model space.
+const onModel = res => gltf => {
+  const root = gltf.scene; root.rotation.y = MODEL_YAW; root.updateMatrixWorld(true);
+  const meshes = []; root.traverse(o => o.isMesh && meshes.push(o));
+  const box = new THREE.Box3();
+  for (const m of meshes) { m.geometry = m.geometry.clone().applyMatrix4(m.matrixWorld); m.geometry.computeBoundingBox(); box.union(m.geometry.boundingBox); }
+  const k = 1 / (box.max.y - box.min.y), c = box.getCenter(new THREE.Vector3());
+  const T = new THREE.Matrix4().makeScale(k, k, k).multiply(new THREE.Matrix4().makeTranslation(-c.x, -box.min.y, -c.z));
+  const g = new THREE.Group();
+  for (const m of meshes) {
+    m.geometry.applyMatrix4(T); m.geometry.computeBoundingSphere();
+    const mesh = new THREE.Mesh(m.geometry, deform(m.material.clone()));
+    mesh.castShadow = true; mesh.frustumCulled = false;
+    mesh.customDepthMaterial = deform(new THREE.MeshDepthMaterial({ depthPacking:THREE.RGBADepthPacking }));
+    g.add(mesh);
+  }
+  res(g);
+};
+// model ships as base64 (window.KAIJU_B64, from kaiju.js or inlined) so it works on hosts that won't serve .glb; else fetch kaiju.glb
+const ready = new Promise(res => {
+  const fail = e => { console.warn('kaiju model failed, using fallback', e); res(fallbackKaiju()); };
+  if (window.KAIJU_B64) loader.parse(Uint8Array.from(atob(window.KAIJU_B64), c => c.charCodeAt(0)).buffer, '', onModel(res), fail);
+  else loader.load('kaiju.glb', onModel(res), undefined, fail);
+});
+ready.then(g => { pivot.add(g); $('go').disabled = false; $('go').textContent = 'RAMPAGE!'; });
+
+// ---------- audio (synthesized, no files) ----------
+let ac, master, sfx, music, noiseBuf, muted = false;
+try { muted = localStorage.getItem('tk-muted') === '1'; } catch {}
+function audioInit() {
+  if (ac) return;
+  ac = new AudioContext();
+  const comp = ac.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 5; comp.attack.value = .003; comp.release.value = .2;
+  master = ac.createGain(); master.gain.value = muted ? 0 : .85; master.connect(comp).connect(ac.destination);
+  // short room reverb from decaying noise
+  const len = ac.sampleRate * 1.8, ir = ac.createBuffer(2, len, ac.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 3); }
+  const verb = ac.createConvolver(); verb.buffer = ir; const vg = ac.createGain(); vg.gain.value = .22; verb.connect(vg).connect(master);
+  sfx = ac.createGain(); sfx.connect(master); sfx.connect(verb);
+  music = ac.createGain(); music.gain.value = .2; music.connect(master);
+  noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+  const nd = noiseBuf.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random()*2-1;
+}
+const T0 = () => ac.currentTime;
+function vca(t, peak, attack, decay, dest = sfx) { const g = ac.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + attack); g.gain.exponentialRampToValueAtTime(.0001, t + attack + decay); g.connect(dest); return g; }
+function nz(t, dur, type, f0, f1, q, peak, attack = .002, dest) {
+  const s = ac.createBufferSource(); s.buffer = noiseBuf; const f = ac.createBiquadFilter(); f.type = type; f.Q.value = q;
+  f.frequency.setValueAtTime(f0, t); if (f1 !== f0) f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  s.connect(f).connect(vca(t, peak, attack, dur, dest)); s.start(t, Math.random() * 1.5, dur + attack + .05);
+}
+function tone(t, type, f0, f1, dur, peak, attack = .003, dest) {
+  const o = ac.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  o.connect(vca(t, peak, attack, dur, dest)); o.start(t); o.stop(t + attack + dur + .05); return o;
+}
+// heavy foot plant: pitch drops as the kaiju grows
+function footstep() {
+  if (!ac) return; const t = T0(), big = Math.min(1, (size - 1) / 6);
+  tone(t, 'sine', 110 - big * 55, 38 - big * 10, .18 + big * .25, .45 + big * .35);
+  nz(t, .08 + big * .2, 'lowpass', 900 - big * 500, 120, .7, .25 + big * .3);
+}
+// building collapse: crack + rumble + debris clatter (+ glass on tall ones)
+let lastCollapse = 0;
+function collapse(vol, h) {
+  if (!ac) return; const t = T0(), b = Math.min(1, Math.cbrt(vol) / 7);
+  const crowded = t - lastCollapse < .06; lastCollapse = t;
+  nz(t, .05, 'highpass', 1800, 1800, .5, crowded ? .25 : .5);
+  nz(t, .35 + b * 1.4, 'lowpass', 600 - b * 300, 70, .9, .35 + b * .5, .01);
+  if (crowded) return;
+  const n = 3 + Math.round(b * 8);
+  for (let i = 0; i < n; i++) nz(t + .04 + Math.random() * (.2 + b * .8), .04 + Math.random() * .06, 'bandpass', rnd(700, 3200), rnd(500, 2500), 3, .28);
+  if (h > 4) for (let i = 0; i < 3 + b * 5; i++) tone(t + .05 + Math.random() * .5, 'sine', rnd(2600, 5200), rnd(2400, 5000), .09, .06);
+}
+// ground-pound: sub drop + gritty burst + long rumble
+function boom() {
+  if (!ac) return; const t = T0();
+  tone(t, 'sine', 95, 28, 1.1, 1);
+  tone(t, 'triangle', 190, 45, .35, .35);
+  nz(t, .25, 'lowpass', 2400, 200, .8, .7);
+  nz(t + .05, 1.6, 'lowpass', 300, 50, 1, .5, .05);
+}
+// kaiju roar: buzzy saw through vocal formants, deeper when bigger
+function roar() {
+  if (!ac) return; const t = T0(), f = 190 / Math.sqrt(.7 + size * .3), dur = 1.1;
+  const o = ac.createOscillator(), o2 = ac.createOscillator(); o.type = o2.type = 'sawtooth';
+  o.frequency.setValueAtTime(f * .8, t); o.frequency.linearRampToValueAtTime(f * 1.15, t + .25); o.frequency.exponentialRampToValueAtTime(f * .55, t + dur);
+  o2.frequency.setValueAtTime(f * .81, t); o2.frequency.linearRampToValueAtTime(f * 1.17, t + .25); o2.frequency.exponentialRampToValueAtTime(f * .56, t + dur);
+  const lfo = ac.createOscillator(), lg = ac.createGain(); lfo.frequency.value = 23; lg.gain.value = f * .12; lfo.connect(lg); lg.connect(o.frequency); lg.connect(o2.frequency);
+  const out = vca(t, .5, .06, dur);
+  for (const [fq, q, g] of [[650, 5, 1], [1100, 6, .6], [2600, 8, .25]]) { const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.setValueAtTime(fq, t); bp.frequency.linearRampToValueAtTime(fq * .75, t + dur); bp.Q.value = q; const gg = ac.createGain(); gg.gain.value = g; o.connect(bp); o2.connect(bp); bp.connect(gg).connect(out); }
+  nz(t, dur, 'bandpass', 1400, 700, 1.2, .15, .08);
+  for (const x of [o, o2, lfo]) { x.start(t); x.stop(t + dur + .1); }
+}
+// car squash: metal clank + crunch, sometimes a startled honk
+function carCrunch() {
+  if (!ac) return; const t = T0();
+  for (const f of [523, 741, 1187]) tone(t, 'square', f, f * .7, .12, .05);
+  nz(t, .18, 'bandpass', 2500, 900, 2, .35);
+  if (Math.random() < .35) { const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1800; lp.connect(sfx); for (const f of [415, 523]) tone(t + .06, 'square', f, f, .22, .07, .01, lp); }
+}
+function chime(notes, step = .07, type = 'triangle', vol = .18) { if (!ac) return; const t = T0(); notes.forEach((f, i) => tone(t + i * step, type, f, f, .25, vol)); }
+function tick(hi) { if (!ac) return; tone(T0(), 'square', hi ? 1760 : 1320, hi ? 1760 : 1320, .05, .08); }
+
+// music: original bouncy loop, A minor pentatonic, tempo rises in the final seconds
+const BASS = [45,0,45,48, 0,45,50,0, 52,0,50,48, 45,0,43,0];
+const LEAD = [0,0,69,0, 72,0,74,0, 76,0,74,72, 0,69,0,67];
+const mf = n => 440 * Math.pow(2, (n - 69) / 12);
+let step = 0, nextT = 0, bar = 0, musicOn = false;
+function musicTick() {
+  if (!musicOn || !ac) return;
+  const bpm = state === 'play' && time < 15 ? 150 : 124, sp = 60 / bpm / 4;
+  while (nextT < ac.currentTime + .12) {
+    const t = nextT, i = step % 16;
+    if (i % 4 === 0) { tone(t, 'sine', 150, 40, .16, .9, .002, music); }
+    if (i === 4 || i === 12) { nz(t, .12, 'bandpass', 1800, 1200, .8, .45, .001, music); tone(t, 'triangle', 220, 160, .08, .25, .002, music); }
+    if (i % 2 === 1) nz(t, .03, 'highpass', 7000, 7000, .7, .18, .001, music);
+    if (BASS[i]) { const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(900, t); lp.frequency.exponentialRampToValueAtTime(200, t + sp * 2); lp.Q.value = 6; lp.connect(music); tone(t, 'sawtooth', mf(BASS[i]), mf(BASS[i]), sp * 1.8, .35, .004, lp); }
+    if (bar % 2 === 1 && LEAD[i]) tone(t, 'square', mf(LEAD[i]), mf(LEAD[i]), sp * 1.5, .07, .004, music);
+    nextT += sp; step++; if (step % 16 === 0) bar++;
+  }
+}
+setInterval(musicTick, 30);
+function startMusic() { if (musicOn) return; musicOn = true; nextT = ac.currentTime + .05; step = 0; bar = 0; }
+function setMuted(m) { muted = m; if (master) master.gain.setTargetAtTime(m ? 0 : .85, ac.currentTime, .05); $('mute').textContent = m ? '🔇' : '🔊'; $('mute').setAttribute('aria-label', m ? 'Unmute' : 'Mute'); try { localStorage.setItem('tk-muted', m ? '1' : '0'); } catch {} }
+
+// ---------- input ----------
+const keys = {};
+addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') { e.preventDefault(); stomp(); } if (e.code === 'KeyM') setMuted(!muted); });
+addEventListener('keyup', e => keys[e.code] = false);
+const joy = { on:false, id:null, ox:0, oy:0, x:0, y:0 };
+if (matchMedia('(pointer:coarse)').matches) document.body.classList.add('touch');
+addEventListener('touchstart', e => { document.body.classList.add('touch'); }, { passive:true, once:true });
+renderer.domElement.addEventListener('pointerdown', e => { if (e.pointerType !== 'touch' || joy.on) return; Object.assign(joy, { on:true, id:e.pointerId, ox:e.clientX, oy:e.clientY, x:0, y:0 }); const j = $('joy'); j.style.display = 'block'; j.style.left = e.clientX+'px'; j.style.top = e.clientY+'px'; });
+addEventListener('pointermove', e => { if (!joy.on || e.pointerId !== joy.id) return; let dx = e.clientX - joy.ox, dy = e.clientY - joy.oy; const l = Math.hypot(dx, dy), m = 50; if (l > m) { dx *= m/l; dy *= m/l; } joy.x = dx/m; joy.y = dy/m; $('joy').firstChild.style.transform = `translate(${dx}px,${dy}px)`; });
+const joyEnd = e => { if (e.pointerId !== joy.id) return; joy.on = false; joy.x = joy.y = 0; $('joy').style.display = 'none'; $('joy').firstChild.style.transform = ''; };
+addEventListener('pointerup', joyEnd); addEventListener('pointercancel', joyEnd);
+$('stomp').addEventListener('pointerdown', e => { e.preventDefault(); stomp(); });
+
+// ---------- game state ----------
+let state = 'title', time = ROUND, score = 0, flattened = 0, size = 1, peak = 1, combo = 0, comboT = 0, trauma = 0, stompCd = 0, jump = -1, tooBigT = 0, walkT = 0;
+const pos = new THREE.Vector3(0, 0, 0), vel = new THREE.Vector3(); let facing = 0;
+const camPos = new THREE.Vector3(0, 14, 18), camLook = new THREE.Vector3();
+
+let lastPop = 0;
+function popText(text, x, y, z, px = 28, color, force) {
+  if (!force && clock.elapsedTime - lastPop < .09) return; lastPop = clock.elapsedTime;
+  const v = new THREE.Vector3(x, y, z).project(camera);
+  if (v.z > 1) return;
+  const el = document.createElement('div'); el.className = 'pop'; el.textContent = text; el.style.fontSize = px + 'px';
+  if (color) el.style.color = color;
+  el.style.left = (v.x * .5 + .5) * innerWidth + 'px'; el.style.top = (-v.y * .5 + .5) * innerHeight + 'px';
+  document.body.appendChild(el); setTimeout(() => el.remove(), 900);
+}
+function bumpCombo() {
+  combo++; comboT = 1.6;
+  if ([10, 25, 50, 100, 200].includes(combo)) chime([660, 830, 990, 1320].slice(0, 2 + Math.min(2, [10, 25, 50, 100, 200].indexOf(combo))));
+  const c = $('combo'); if (combo >= 3) { c.textContent = `${combo}× COMBO`; c.style.opacity = 1; c.style.fontSize = Math.min(44 + combo, 80) + 'px'; }
+}
+function grow(amount) {
+  const before = Math.floor(size); size += amount / (size * size * 1.2); peak = Math.max(peak, size);
+  if (Math.floor(size) > before && state === 'play') { roar(); popText(`GROWTH! ${Math.round(size * 20)} m`, pos.x, size * 2.6, pos.z, 38, '#7fe0a8', true); }
+}
+
+function smash(p, power = 1) {
+  p.alive = false; scene.remove(p.obj);
+  const vol = p.w * p.d * p.h;
+  const n = Math.min(60, Math.max(6, Math.round(Math.cbrt(vol) * 6)));
+  const chunk = Math.max(.2, Math.cbrt(vol / n) * .8);
+  for (let i = 0; i < n; i++) spawnDebris(p.x, 0, p.z, p.w, p.h, p.d, p.colors[i % 5 === 0 ? 1 : i % 7 === 0 ? 2 : 0], pos, power * Math.min(1.6, .6 + Math.cbrt(vol)*.12), chunk);
+  for (let i = 0; i < Math.min(10, 2 + n/6); i++) puff(p.x + rnd(-p.w,p.w)/2, rnd(0, p.h*.5), p.z + rnd(-p.d,p.d)/2, Math.min(size * .35, Math.max(.3, chunk * 1.1)));
+  bumpCombo();
+  const pts = Math.round((10 + vol * 4) * Math.min(10, 1 + combo * .25));
+  score += pts; flattened++;
+  grow(vol * .012 + .02);
+  trauma = Math.min(1, trauma + Math.min(.5, .05 + vol * .002));
+  popText('+' + pts.toLocaleString(), p.x, p.h, p.z, Math.min(48, 20 + Math.cbrt(vol) * 4));
+  collapse(vol, p.h);
+  if (state === 'play' && flattened === props.length) { const bonus = Math.ceil(time) * 25000; score += bonus; popText(`CITY CLEARED! +${bonus.toLocaleString()}`, pos.x, size * 2.5, pos.z, 40, '#ffd166', true); end(); }
+}
+function squashCar(c) {
+  c.alive = false; scene.remove(c.obj);
+  for (let i = 0; i < 8; i++) spawnDebris(c.obj.position.x, 0, c.obj.position.z, 1, .5, .6, i % 3 ? c.col : '#dff3ff', pos, .8, .25);
+  bumpCombo(); const pts = 50 * Math.min(10, 1 + combo * .25) | 0; score += pts; grow(.15);
+  popText('+' + pts + ' 🚗', c.obj.position.x, 1, c.obj.position.z, 22, '#ffd166'); carCrunch();
+}
+function stomp() {
+  if (state !== 'play' || stompCd > 0 || jump >= 0) return;
+  jump = 0; stompCd = 1.1; $('stomp').classList.add('cool');
+}
+function land() {
+  const R = 2.6 * size + 1.5; boom(); trauma = Math.min(1, trauma + .55);
+  ring(pos.x, pos.z, R);
+  for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2; puff(pos.x + Math.cos(a) * size*.8, .2, pos.z + Math.sin(a) * size*.8, size*.5); }
+  for (const p of props) if (p.alive && p.h <= size * SMASH_RATIO * 1.15 && Math.hypot(p.x - pos.x, p.z - pos.z) < R + Math.max(p.w, p.d) / 2) smash(p, 1.4);
+  for (const c of cars) if (c.alive && c.obj.position.distanceTo(pos) < R) squashCar(c);
+}
+
+function reset() {
+  for (const p of props) if (!p.alive) { p.alive = true; scene.add(p.obj); }
+  for (const c of cars) if (!c.alive) { c.alive = true; scene.add(c.obj); }
+  for (const d of D) d.life = 0;
+  Object.assign(window, {}); time = ROUND; score = 0; flattened = 0; size = 1; peak = 1; combo = 0; trauma = 0; stompCd = 0; jump = -1;
+  pos.set(0, 0, 0); vel.set(0, 0, 0);
+}
+function start() { audioInit(); ac.resume(); reset(); state = 'play'; $('start').classList.add('hidden'); $('end').classList.add('hidden'); startMusic(); roar(); }
+$('mute').onclick = e => { audioInit(); setMuted(!muted); e.currentTarget.blur(); }; setMuted(muted);
+$('go').onclick = start; $('again').onclick = start;
+
+const RANKS = [[0,'Mild Nuisance'],[40000,'Minor Fender-Bender'],[200000,'Urban Renewal'],[700000,'Insurance Nightmare'],[1600000,'Certified Catastrophe'],[3000000,'LEGENDARY KAIJU']];
+function end() {
+  state = 'over'; boom(); chime([784, 659, 523, 392], .14, 'square', .1); combo = 0; $('combo').style.opacity = 0;
+  const rank = RANKS.filter(r => score >= r[0]).pop()[1];
+  $('rank').textContent = rank; $('fScore').textContent = score.toLocaleString(); $('fCount').textContent = flattened;
+  $('fSize').textContent = Math.round(peak * 20) + ' m';
+  let best = 0; try { best = +localStorage.getItem('tk-best') || 0; if (score > best) localStorage.setItem('tk-best', score); } catch {}
+  $('best').textContent = score > best ? '🏆 New personal best!' : `Best: ${best.toLocaleString()}`;
+  $('share').onclick = () => { const t = `🦖 TINY KAIJU: I caused ${score.toLocaleString()} damage, flattened ${flattened} things and grew to ${Math.round(peak*20)} m. Rank: ${rank}. ${location.href}`; navigator.clipboard?.writeText(t).then(() => $('share').textContent = 'Copied!', () => {}); };
+  setTimeout(() => $('end').classList.remove('hidden'), 700);
+}
+
+// ---------- loop ----------
+const clock = new THREE.Clock(), fwd = new THREE.Vector3(0,0,-1), right = new THREE.Vector3(1,0,0);
+function update(dt) {
+  const t = clock.elapsedTime;
+  // cars drive regardless of state
+  for (const c of cars) {
+    if (!c.alive) continue;
+    c.s += c.v * c.dir * dt; if (c.s > HALF) c.s = -HALF; if (c.s < -HALF) c.s = HALF;
+    if (c.alongX) { c.obj.position.set(c.s, .02, c.lane); c.obj.rotation.y = c.dir > 0 ? 0 : Math.PI; }
+    else { c.obj.position.set(c.lane, .02, c.s); c.obj.rotation.y = c.dir > 0 ? -Math.PI/2 : Math.PI/2; }
+  }
+  if (state === 'play') {
+    const prevT = Math.ceil(time); time -= dt; if (time <= 0) { time = 0; end(); }
+    else if (time < 10 && Math.ceil(time) !== prevT) tick(time < 4);
+    stompCd = Math.max(0, stompCd - dt); if (!stompCd) $('stomp').classList.remove('cool');
+    let ix = (keys.KeyD||keys.ArrowRight?1:0) - (keys.KeyA||keys.ArrowLeft?1:0) + joy.x;
+    let iz = (keys.KeyS||keys.ArrowDown?1:0) - (keys.KeyW||keys.ArrowUp?1:0) + joy.y;
+    const il = Math.hypot(ix, iz); if (il > 1) { ix /= il; iz /= il; }
+    const speed = 5 + size * 2.6;
+    vel.lerp(new THREE.Vector3(ix * speed, 0, iz * speed), 1 - Math.exp(-dt * 10));
+    pos.addScaledVector(vel, dt);
+    const r = .38 * size;
+    pos.x = THREE.MathUtils.clamp(pos.x, -HALF, HALF); pos.z = THREE.MathUtils.clamp(pos.z, -HALF, HALF);
+    for (const p of props) {
+      if (!p.alive) continue;
+      const cx = THREE.MathUtils.clamp(pos.x, p.x - p.w/2, p.x + p.w/2), cz = THREE.MathUtils.clamp(pos.z, p.z - p.d/2, p.z + p.d/2);
+      const dx = pos.x - cx, dz = pos.z - cz, d = Math.hypot(dx, dz);
+      if (d >= r) continue;
+      if (p.h <= size * SMASH_RATIO) smash(p);
+      else { // too tall: push out
+        if (d > 1e-4) { pos.x = cx + dx / d * r; pos.z = cz + dz / d * r; } else pos.x += r;
+        if (tooBigT <= 0) { popText(`TOO BIG! need ${Math.ceil(p.h / SMASH_RATIO * 20)} m`, pos.x, size*2.4, pos.z, 20, '#ff6f7d', true); tooBigT = 1.2; }
+      }
+    }
+    tooBigT -= dt;
+    for (const c of cars) if (c.alive && Math.hypot(c.obj.position.x - pos.x, c.obj.position.z - pos.z) < r + .5) squashCar(c);
+    comboT -= dt; if (comboT <= 0 && combo) { combo = 0; $('combo').style.opacity = 0; }
+    if (il > .1) facing = Math.atan2(ix, iz);
+  }
+  // kaiju animation: stride phase follows distance travelled, so feet don't skate
+  const spd = Math.hypot(vel.x, vel.z), moving = spd > .6;
+  WALK.uAmt.value += ((moving ? Math.min(1, spd / 4) : 0) - WALK.uAmt.value) * (1 - Math.exp(-dt * 10));
+  const prevPh = walkT;
+  walkT += spd * dt / (.55 * size);              // one stride ≈ 0.55 body-heights
+  if (!moving) walkT += (Math.round(walkT / Math.PI) * Math.PI - walkT) * (1 - Math.exp(-dt * 8)); // settle feet together
+  WALK.uPhase.value = walkT; WALK.uTime.value = t;
+  if (moving && jump < 0 && Math.floor(prevPh / Math.PI) !== Math.floor(walkT / Math.PI)) { // a foot plants
+    footstep(); trauma = Math.min(1, trauma + .04 + size * .01);
+    const sd = Math.floor(walkT / Math.PI) % 2 ? 1 : -1, fx = Math.cos(kaiju.rotation.y) * sd * .3 * size * 2, fz = -Math.sin(kaiju.rotation.y) * sd * .3 * size * 2;
+    puff(pos.x + fx, .1, pos.z + fz, .3 * size); puff(pos.x + fx, .1, pos.z + fz, .25 * size);
+  }
+  let y = 0;
+  if (jump >= 0) { jump += dt / .55; y = Math.sin(Math.min(jump,1) * Math.PI) * (1.2 + size * 1.1); if (jump >= 1) { jump = -1; land(); } }
+  kaiju.position.set(pos.x, y, pos.z);
+  kaiju.scale.setScalar(THREE.MathUtils.lerp(kaiju.scale.x, size * 2, 1 - Math.exp(-dt * 6)));
+  kaiju.rotation.y += Math.atan2(Math.sin(facing - kaiju.rotation.y), Math.cos(facing - kaiju.rotation.y)) * (1 - Math.exp(-dt * 12));
+  const A = WALK.uAmt.value, plant = Math.abs(Math.cos(walkT));      // 1 at foot plant, 0 mid-stride
+  pivot.position.y = A * (1 - plant) * .045;                           // rise mid-stride
+  pivot.rotation.z = Math.sin(walkT) * .09 * A;                        // waddle onto the planted leg
+  pivot.rotation.y = Math.sin(walkT) * .06 * A;                        // hip twist
+  pivot.rotation.x += ((jump >= 0 ? -.3 : A * .1) - pivot.rotation.x) * (1 - Math.exp(-dt * 10)); // lean into the walk
+  const breathe = 1 + Math.sin(t * 2.2) * .012 * (1 - A), squash = 1 - Math.pow(plant, 8) * .05 * A;
+  pivot.scale.set(1 / Math.sqrt(squash * breathe), squash * breathe, 1 / Math.sqrt(squash * breathe));
+
+  // debris
+  for (let i = 0; i < DMAX; i++) {
+    const d = D[i]; if (d.life <= 0) continue;
+    d.life -= dt; d.v.y -= 30 * dt; d.p.addScaledVector(d.v, dt);
+    d.r.x += d.w.x * dt; d.r.y += d.w.y * dt; d.r.z += d.w.z * dt;
+    if (d.p.y < d.s / 2) { d.p.y = d.s / 2; d.v.y *= -.3; d.v.x *= .7; d.v.z *= .7; d.w.multiplyScalar(.7); }
+    const s = d.life <= 0 ? 0 : d.s * Math.min(1, d.life * 2);
+    debris.setMatrixAt(i, dm.compose(d.p, dq.setFromEuler(d.r), dsv.setScalar(s)));
+  }
+  debris.instanceMatrix.needsUpdate = true; if (debris.instanceColor) debris.instanceColor.needsUpdate = true;
+  for (let i = 0; i < PMAX; i++) {
+    const q = PU[i]; if (q.t >= q.life) { if (q.life) { puffs.setMatrixAt(i, dm.makeScale(0,0,0)); q.life = 0; } continue; }
+    q.t += dt; q.p.addScaledVector(q.v, dt); q.v.multiplyScalar(1 - dt * 2);
+    const k = q.t / q.life, s = q.s * Math.sin(Math.min(1, k) * Math.PI) * (1 + k);
+    puffs.setMatrixAt(i, dm.compose(q.p, dq.identity(), dsv.setScalar(Math.max(0, s))));
+  }
+  puffs.instanceMatrix.needsUpdate = true;
+  for (let i = rings.length - 1; i >= 0; i--) {
+    const g = rings[i]; g.t += dt * 2.2; g.m.scale.setScalar(g.r * Math.min(1, g.t) + .1); g.m.material.opacity = 1 - g.t;
+    if (g.t >= 1) { scene.remove(g.m); g.m.geometry.dispose(); rings.splice(i, 1); }
+  }
+
+  // camera
+  const zoom = .6 + size * 1.1;
+  const target = new THREE.Vector3(pos.x, 0, pos.z);
+  camPos.lerp(target.clone().add(new THREE.Vector3(0, 8 * zoom, 5.5 * zoom)), 1 - Math.exp(-dt * 4));
+  camLook.lerp(target.clone().setY(size * .9), 1 - Math.exp(-dt * 6));
+  trauma = Math.max(0, trauma - dt * 1.4);
+  const sh = trauma * trauma * .6 * zoom * .3;
+  camera.position.copy(camPos).add(new THREE.Vector3(rnd(-sh,sh), rnd(-sh,sh), rnd(-sh,sh)));
+  if (state === 'title') { const a = t * .12; camera.position.set(Math.sin(a) * 70, 45, Math.cos(a) * 70); camLook.set(0,0,0); }
+  camera.lookAt(camLook);
+  scene.fog.near = 40 + zoom * 8; scene.fog.far = 140 + zoom * 18;
+
+  // sun follows player for crisp shadows
+  const ext = 18 + size * 6;
+  sun.position.set(pos.x + 30, 60, pos.z + 20); sun.target.position.set(pos.x, 0, pos.z);
+  const sc = sun.shadow.camera; if (sc.right !== ext) { sc.left = sc.bottom = -ext; sc.right = sc.top = ext; sc.far = 160; sc.updateProjectionMatrix(); }
+
+  // HUD
+  $('score').textContent = score.toLocaleString();
+  $('time').textContent = Math.ceil(time); $('timer').classList.toggle('low', state === 'play' && time < 10);
+  $('growlbl').textContent = Math.round(size * 20) + ' m tall';
+  $('growfill').style.width = Math.min(100, (size - 1) / 7 * 100) + '%';
+}
+renderer.setAnimationLoop(() => { update(Math.min(clock.getDelta(), 1/20)); renderer.render(scene, camera); });
+addEventListener('resize', () => { camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+window.__tk = { get size(){return size}, get score(){return score}, get state(){return state}, start, end:() => { time = .01; }, joy, props, pos, get facing(){return facing}, get yaw(){return kaiju.rotation.y} };
+</script>
+</body>
+</html>
